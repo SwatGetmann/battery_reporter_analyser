@@ -13,13 +13,15 @@ tables = soup.find_all('table')
 
 # Table 0: Metadata - System Info
 metadata_str = [el.text.strip() for el in tables[0].find_all('td')]
-metadata = dict(zip(metadata_str[0::2], metadata_str[1::2]))
+headers = metadata_str[0::2]
+metadata = dict(zip(headers, metadata_str[1::2]))
 
 # Table 1: Metadata - Installed Batteries
 metadata2_str = [el.text.strip() for el in tables[1].find_all('td')]
-# Battery info is broken - fix
+# Battery info is given per each vattery attached, but we deal with a single one
 metadata2_str[0], metadata2_str[1] = [x.strip() for x in metadata2_str[1].split("\n") if x]
-metadata2 = dict(zip(metadata2_str[0::2], metadata2_str[1::2]))
+headers = metadata2_str[0::2]
+metadata2 = dict(zip(headers, metadata2_str[1::2]))
 
 # Table 2: Recent Usage
 metadata3_str = [el.text.strip() for el in tables[2].find_all('td')]
@@ -36,6 +38,7 @@ metadata4 = [dict(zip(headers, d)) for d in data]
 
 # Table 4: Usage History
 metadata5_str = [el.text.strip() for el in tables[4].find_all('td')]
+# Fixes for merged table cells
 headers_l1 = metadata5_str[0:4]
 headers_l2 = metadata5_str[4:10]
 headers_l1.insert(2, headers_l1[1])
