@@ -11,7 +11,7 @@ def parse_table_1(table: Tag):
     # Table 0: Metadata - System Info
     td_1 = [el.text.strip() for el in table.find_all('td')]
     th_1 = td_1[0::2]
-    p_td_1 = dict(zip(th_1, td_1[1::2]))
+    p_td_1 = [dict(zip(th_1, td_1[1::2]))]
     return p_td_1
 
 def parse_table_2(table: Tag):
@@ -20,7 +20,7 @@ def parse_table_2(table: Tag):
     # Battery info is given per each battery attached, but we deal with a single one
     td_2[0], td_2[1] = [x.strip() for x in td_2[1].split("\n") if x]
     th_2 = td_2[0::2]
-    p_td_2 = dict(zip(th_2, td_2[1::2]))
+    p_td_2 = [dict(zip(th_2, td_2[1::2]))]
     return p_td_2
 
 def parse_table_3(table: Tag):
@@ -78,7 +78,7 @@ def parse_table_7_8(table1: Tag, table2: Tag):
     # Table 7: Current estimate of battery life based on all observed drains since OS install
     # NOTE: Table has no th! So they are taken from the previous step.
     td_8 = [el.text.strip() for el in table2.find_all('td')]
-    p_td_8 = dict(zip(th_7, td_8))
+    p_td_8 = [dict(zip(th_7, td_8))]
 
     return (p_td_7, p_td_8)
     
@@ -90,7 +90,7 @@ def parse_tables(tables: ResultSet[Tag]):
         tables (ResultSet[Any]): input array of table nodes from the report
 
     Returns:
-        List[Union[None, Dict[AnyStr, AnyStr], List[Dict[AnyStr, AnyStr]]]]:
+        List[Union[None, List[Dict[AnyStr, AnyStr]]]]:
             List of all the parsed information.
             NOTE: For now it is stored either in List of Dicts, or in a Dict,
             but that's going to change to use a common container class.
@@ -133,7 +133,10 @@ def parse_tables(tables: ResultSet[Tag]):
 
 
 if __name__ == '__main__':
-    with open("./test/battery-report-240217-j.html", 'r') as fp:
+    input_path = "./test/battery-report-240217-j.html"
+    output_path_pattern = "./parquets/test_%s.parquet"
+
+    with open(input_path, 'r') as fp:
         soup = BeautifulSoup(fp, 'html.parser')
 
     tables = soup.find_all('table')
@@ -141,3 +144,9 @@ if __name__ == '__main__':
     for pt in parsed_tables:
         print(10*'-')
         print(pt)
+
+    for idx, pt in enumerate(parsed_tables):
+        print(10*'=')
+        print(idx)
+        pt_df = pd.DataFrame(data=pt)
+        print(pt_df.head())
