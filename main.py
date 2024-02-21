@@ -6,6 +6,7 @@ collections.Callable = collections.abc.Callable
 
 from bs4 import BeautifulSoup, ResultSet, Tag
 from typing import List
+from pathlib import Path
 
 def parse_table_1(table: Tag):
     # Table 0: Metadata - System Info
@@ -134,7 +135,10 @@ def parse_tables(tables: ResultSet[Tag]):
 
 if __name__ == '__main__':
     input_path = "./test/battery-report-240217-j.html"
-    output_path_pattern = "./parquets/test_%s.parquet"
+    output_dir =  "./parquets"
+    output_dir_path = Path(output_dir)
+    output_dir_path.mkdir(parents=True)
+    output_path_pattern = "test_%s.parquet"
 
     with open(input_path, 'r') as fp:
         soup = BeautifulSoup(fp, 'html.parser')
@@ -150,3 +154,6 @@ if __name__ == '__main__':
         print(idx)
         pt_df = pd.DataFrame(data=pt)
         print(pt_df.head())
+        output_path_df = output_dir_path / (output_path_pattern % idx)
+        print(output_path_df)
+        pt_df.to_parquet(path=output_path_df)
