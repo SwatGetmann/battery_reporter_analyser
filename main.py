@@ -4,8 +4,10 @@ import pandas as pd
 import collections
 collections.Callable = collections.abc.Callable
 
+import argparse
+
 from bs4 import BeautifulSoup, ResultSet, Tag
-from typing import List
+from typing import List, Dict
 from pathlib import Path
 
 def parse_table_1(table: Tag):
@@ -84,7 +86,7 @@ def parse_table_7_8(table1: Tag, table2: Tag):
     return (p_td_7, p_td_8)
     
 
-def parse_tables(tables: ResultSet[Tag]):
+def parse_tables(tables: ResultSet[Tag], table_flags: Dict[int, bool]):
     """Parser for Battery Report Tables
 
     Args:
@@ -106,50 +108,106 @@ def parse_tables(tables: ResultSet[Tag]):
     # p_td = parsed table data
 
     # Table 0: Metadata - System Info
-    tables_parsed.append(parse_table_1(tables[0]))
+    if 1 in table_flags:
+        tables_parsed.append(parse_table_1(tables[0]))
 
     # Table 1: Metadata - Installed Batteries
-    tables_parsed.append(parse_table_2(tables[1]))
+    if 2 in table_flags:
+        tables_parsed.append(parse_table_2(tables[1]))
 
     # Table 2: Recent Usage
-    tables_parsed.append(parse_table_3(tables[2]))
+    if 3 in table_flags:
+        tables_parsed.append(parse_table_3(tables[2]))
 
     # Table 3: Battery Usage (under the chart)
-    tables_parsed.append(parse_table_4(tables[3]))
+    if 4 in table_flags:
+        tables_parsed.append(parse_table_4(tables[3]))
 
     # Table 4: Usage History
-    tables_parsed.append(parse_table_5(tables[4]))
+    if 5 in table_flags:
+        tables_parsed.append(parse_table_5(tables[4]))
 
     # Table 5: Battery Capacity History
-    tables_parsed.append(parse_table_6(tables[5]))
+    if 6 in table_flags:
+        tables_parsed.append(parse_table_6(tables[5]))
 
     # Table 6: Battery Life Estimates &
     # Table 7: Current estimate of battery life based on all observed drains since OS install
-    p_td_7, p_td_8 = parse_table_7_8(tables[6], tables[7])
-    tables_parsed.append(p_td_7)
-    if p_td_8:
-        tables_parsed.append(p_td_8)
+    if 7 in table_flags or 8 in table_flags:
+        p_td_7, p_td_8 = parse_table_7_8(tables[6], tables[7])
+        if 7 in table_flags:
+            tables_parsed.append(p_td_7)
+        if p_td_8 and 8 in table_flags:
+            tables_parsed.append(p_td_8)
 
     return tables_parsed
 
+arg_parser = argparse.ArgumentParser(description="Windows Battery Report Parser & Analyser.")
+group = arg_parser.add_mutually_exclusive_group(required=True)
+group.add_argument('--input_dir', type=Path, help='Directory with reports to parse')
+group.add_argument('--input_file', type=open, help='Report File to parse')
+arg_parser.add_argument('--tables', nargs="+", default='all', help='Tables to parse (default: %(default)s)')
+arg_parser.add_argument('--output_dir', type=Path, help='Directory to save parsed reports to')
 
-if __name__ == '__main__':
-    input_path = "./test/battery-report-240217-j.html"
-    output_dir =  "./parquets"
-    output_dir_path = Path(output_dir)
-    output_dir_path.mkdir(parents=True)
-    output_path_pattern = "test_%s.parquet"
-
-    with open(input_path, 'r') as fp:
+def parse_file(input_path, table_flags):
+    with input_path as fp:
         soup = BeautifulSoup(fp, 'html.parser')
 
     tables = soup.find_all('table')
-    parsed_tables = parse_tables(tables)
+    return parse_tables(tables, table_flags)
+
+if __name__ == '__main__':
+    args = arg_parser.parse_args()
+    print(args)
+
+    if not args.input_dir and not args.input_file:
+        print("There's nothing to process. Exiting...")
+        exit(0)
+    elif args.input_dir:
+        f_parse_dir = True
+        input_path = args.input_dir
+    else:
+        f_parse_dir = False
+        input_path = args.input_file
+    
+    if not args.output_dir:
+        print("There's nowhere to save. Exiting...")
+        exit(0)
+    else:
+        output_dir_path = args.output_dir
+        if not output_dir_path.exists():
+            output_dir_path.mkdir(parents=True)
+
+    if args.tables != 'all':
+        def table_param_check(t):
+            return int(t) < 1 and int(t) > 8
+        
+        table_checks = [table_param_check(t) for t in args.tables]
+        if any(table_checks):
+            print("Invalid tables identificators were given. Exiting...")
+            exit(0)
+        
+        table_flags = {} # not optimal at all
+        for t in args.tables:
+            table_flags[int(t)] = True
+    else:
+        table_flags = {}
+        for i in range(1, 9):
+            table_flags[i] = True
+    
+    output_path_pattern = "test_%s.parquet"
+
+    # if f_parse_dir:
+    #     # TBD
+    # else:
+    print(table_flags)
+    parsed_tables = parse_file(input_path, table_flags)
+        
     for pt in parsed_tables:
         print(10*'-')
         print(pt)
 
-    for idx, pt in enumerate(parsed_tables):
+    for idx, pt in enumerate(parsed_tables): # enumerate is wrong actually!
         print(10*'=')
         print(idx)
         pt_df = pd.DataFrame(data=pt)
