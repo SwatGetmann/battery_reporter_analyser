@@ -7,7 +7,7 @@ collections.Callable = collections.abc.Callable
 import argparse
 
 from bs4 import BeautifulSoup, ResultSet, Tag
-from typing import List, Dict
+from typing import List, Dict, AnyStr, Union
 from pathlib import Path
 
 def parse_table_1(table: Tag):
@@ -86,11 +86,14 @@ def parse_table_7_8(table1: Tag, table2: Tag):
     return (p_td_7, p_td_8)
     
 
-def parse_tables(tables: ResultSet[Tag], table_flags: Dict[int, bool]):
+def parse_tables(tables: ResultSet[Tag], table_flags: Dict[int, bool]) -> List[Union[None, List[Dict[AnyStr, AnyStr]]]]:
     """Parser for Battery Report Tables
 
     Args:
-        tables (ResultSet[Any]): input array of table nodes from the report
+        tables (ResultSet[Tag]):
+            input array of table nodes from the report
+        table_flags: (Dict[int, bool]):
+            dict of flag whether to add or skip specific table parsing
 
     Returns:
         List[Union[None, List[Dict[AnyStr, AnyStr]]]]:
@@ -103,6 +106,7 @@ def parse_tables(tables: ResultSet[Tag], table_flags: Dict[int, bool]):
 
     tables_parsed = []
 
+    # == LEGEND
     # th = table header
     # td = table data (may include all, including th)
     # p_td = parsed table data
@@ -145,7 +149,7 @@ def parse_tables(tables: ResultSet[Tag], table_flags: Dict[int, bool]):
 arg_parser = argparse.ArgumentParser(description="Windows Battery Report Parser & Analyser.")
 group = arg_parser.add_mutually_exclusive_group(required=True)
 group.add_argument('--input_dir', type=Path, help='Directory with reports to parse')
-group.add_argument('--input_file', type=open, help='Report File to parse')
+group.add_argument('--input_file', type=Path, help='Report File to parse')
 arg_parser.add_argument('--tables', nargs="+", default='all', help='Tables to parse (default: %(default)s)')
 arg_parser.add_argument('--output_dir', type=Path, help='Directory to save parsed reports to')
 
@@ -156,6 +160,20 @@ def parse_file(input_path, table_flags):
     tables = soup.find_all('table')
     return parse_tables(tables, table_flags)
 
+def handle_parsed_tables(parsed_tables: List[Union[None, List[Dict[AnyStr, AnyStr]]]], output_dir_path: Path, output_path_pattern: str):
+    for pt in parsed_tables:
+        print(10*'-')
+        print(pt)
+
+    for idx, pt in enumerate(parsed_tables): # TODO: use indexes not of output array, but of global table presence
+        print(10*'=')
+        print(idx)
+        pt_df = pd.DataFrame(data=pt)
+        print(pt_df.head())
+        output_path_df = output_dir_path / (output_path_pattern % idx)
+        print(output_path_df)
+        pt_df.to_parquet(path=output_path_df)
+
 if __name__ == '__main__':
     args = arg_parser.parse_args()
     print(args)
@@ -163,20 +181,24 @@ if __name__ == '__main__':
     if not args.input_dir and not args.input_file:
         print("There's nothing to process. Exiting...")
         exit(0)
-    elif args.input_dir:
-        f_parse_dir = True
-        input_path = args.input_dir
-    else:
-        f_parse_dir = False
-        input_path = args.input_file
     
+    if args.input_dir:
+        input_paths = args.input_dir.glob('*.html')
+    else:
+        input_paths = [args.input_file]
+    
+    input_paths_non_presence_check = any([not p.exists() for p in input_paths])
+    if input_paths_non_presence_check:
+        print("Input does not exist. Exiting...")
+        exit(0)
+
     if not args.output_dir:
         print("There's nowhere to save. Exiting...")
         exit(0)
-    else:
-        output_dir_path = args.output_dir
-        if not output_dir_path.exists():
-            output_dir_path.mkdir(parents=True)
+    
+    output_dir_path = args.output_dir
+    if not output_dir_path.exists():
+        output_dir_path.mkdir(parents=True)
 
     if args.tables != 'all':
         def table_param_check(t):
@@ -195,23 +217,8 @@ if __name__ == '__main__':
         for i in range(1, 9):
             table_flags[i] = True
     
-    output_path_pattern = "test_%s.parquet"
-
-    # if f_parse_dir:
-    #     # TBD
-    # else:
-    print(table_flags)
-    parsed_tables = parse_file(input_path, table_flags)
-        
-    for pt in parsed_tables:
-        print(10*'-')
-        print(pt)
-
-    for idx, pt in enumerate(parsed_tables): # enumerate is wrong actually!
-        print(10*'=')
-        print(idx)
-        pt_df = pd.DataFrame(data=pt)
-        print(pt_df.head())
-        output_path_df = output_dir_path / (output_path_pattern % idx)
-        print(output_path_df)
-        pt_df.to_parquet(path=output_path_df)
+    # TODO: add merging
+    for i, fp in enumerate(input_paths):
+        output_path_pattern = f"test_{i}_%s.parquet"
+        parsed_tables = parse_file(open(fp), table_flags)
+        handle_parsed_tables(parsed_tables, output_dir_path, output_path_pattern)
