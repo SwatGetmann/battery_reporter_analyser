@@ -200,22 +200,22 @@ if __name__ == '__main__':
     if not output_dir_path.exists():
         output_dir_path.mkdir(parents=True)
 
+    table_process_ids = range(1, 9)
     if args.tables != 'all':
         def table_param_check(t):
-            return int(t) < 1 and int(t) > 8
+            return int(t) < 1 or int(t) > 8
         
         table_checks = [table_param_check(t) for t in args.tables]
+        print(table_checks)
         if any(table_checks):
             print("Invalid tables identificators were given. Exiting...")
             exit(0)
         
-        table_flags = {} # not optimal at all
-        for t in args.tables:
-            table_flags[int(t)] = True
-    else:
-        table_flags = {}
-        for i in range(1, 9):
-            table_flags[i] = True
+        table_process_ids = [int(ti) for ti in args.tables]
+        
+    table_flags = {} # not optimal at all
+    for t in table_process_ids:
+        table_flags[t] = True
     
     # TODO: add merging
     for i, fp in enumerate(input_paths):
