@@ -164,12 +164,10 @@ def parse_file(input_path):
     tables = soup.find_all('table')
     return tables
 
-def handle_parsed_tables(
+def save_tables(
         tables_container: List[List[Union[None,pd.DataFrame]]],
         output_dir_path: Path,
         output_path_pattern: str):
-    print(tables_container)
-
     for idx, pt_df in enumerate(tables_container):
         print(10*'=')
         print(idx)
@@ -236,4 +234,4 @@ if __name__ == '__main__':
         output_path_pattern = f"test_{i}_%s.parquet"
         table_tags = parse_file(open(fp))
         parse_tables(table_tags, table_process_flags, tables_container)
-        handle_parsed_tables(tables_container, output_dir_path, output_path_pattern)
+        save_tables(tables_container, output_dir_path, output_path_pattern)
