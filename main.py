@@ -235,3 +235,10 @@ if __name__ == '__main__':
         table_tags = parse_file(open(fp))
         parse_tables(table_tags, table_process_flags, tables_container)
         save_tables(tables_container, output_dir_path, output_path_pattern)
+    
+    for i in range(TOTAL_TABLES):
+        print(f"Merging Table : {i}")
+        if not table_process_flags[i]:
+            continue
+        df_merged = pd.concat(tables_container[i])
+        print(df_merged)
