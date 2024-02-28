@@ -7,10 +7,9 @@ collections.Callable = collections.abc.Callable
 import argparse
 
 from bs4 import BeautifulSoup, ResultSet, Tag
-from typing import List, Dict, AnyStr, Union
+from typing import List, Union
 from pathlib import Path
 
-from IPython.core.debugger import set_trace
 
 # == LEGEND
 # th = table header
