@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup, ResultSet, Tag
 from typing import List, Dict, AnyStr, Union
 from pathlib import Path
 
+from IPython.core.debugger import set_trace
+
 # == LEGEND
 # th = table header
 # td = table data (may include all, including th)
@@ -19,26 +21,25 @@ def parse_table_1(table: Tag):
     # Table 0: Metadata - System Info
     td_1 = [el.text.strip() for el in table.find_all('td')]
     th_1 = td_1[0::2]
-    p_td_1 = [dict(zip(th_1, td_1[1::2]))]
-    return p_td_1
+    df = pd.DataFrame(data=[td_1[1::2]], columns=th_1)
+    return df
 
 def parse_table_2(table: Tag):
     # Table 1: Metadata - Installed Batteries
     td_2 = [el.text.strip() for el in table.find_all('td')]
     # Battery info is given per each battery attached, but we deal with a single one
-    print(td_2)
     td_2[0], td_2[1] = [x.strip() for x in td_2[1].split("\n") if x]
     th_2 = td_2[0::2]
-    p_td_2 = [dict(zip(th_2, td_2[1::2]))]
-    return p_td_2
+    df = pd.DataFrame(data=[td_2[1::2]], columns=th_2)
+    return df
 
 def parse_table_3(table: Tag):
     # Table 2: Recent Usage
     td_3 = [el.text.strip() for el in table.find_all('td')]
     th_3 = td_3[0:4] + ["CAPACITY REMAINING (mWh)"]
     td_3 = [td_3[4+i:4+i+5] for i in range(0, len(td_3[4:]), 5)]
-    p_td_3 = [dict(zip(th_3, d)) for d in td_3]
-    return p_td_3
+    df = pd.DataFrame(data=td_3, columns=th_3)
+    return df
 
 def parse_table_4(table: Tag):
     # Table 3: Battery Usage (under the chart)
@@ -46,8 +47,8 @@ def parse_table_4(table: Tag):
     th_4 = td_4[0:4] + ["ENERGY DRAINED (mWh)"]
     td_4 = [el for el in td_4 if el]
     td_4 = [td_4[4+i:4+i+5] for i in range(0, len(td_4[4:]), 5)]
-    p_td_4 = [dict(zip(th_4, d)) for d in td_4]
-    return p_td_4
+    df = pd.DataFrame(data=td_4, columns=th_4)
+    return df
 
 def parse_table_5(table: Tag):
     # Table 4: Usage History
@@ -59,16 +60,16 @@ def parse_table_5(table: Tag):
     th_5_l1.append(th_5_l1[-1])
     th_5 = [f"{th_5_l1[i]} - {th_5_l2[i]}" for i in range(len(th_5_l1))]
     td_5 = [td_5[10+i:10+i+6] for i in range(0, len(td_5[10:]), 6)]
-    p_td_5 = [dict(zip(th_5, d)) for d in td_5]
-    return p_td_5
+    df = pd.DataFrame(data=td_5, columns=th_5)
+    return df
 
 def parse_table_6(table: Tag):
     # Table 5: Battery Capacity History
     td_6 = [el.text.strip() for el in table.find_all('td')]
     th_6 = td_6[0:3]
     td_6 = [td_6[3+i:3+i+3] for i in range(0, len(td_6[3:]), 3)]
-    p_td_6 = [dict(zip(th_6, d)) for d in td_6]
-    return p_td_6
+    df = pd.DataFrame(data=td_6, columns=th_6)
+    return df
 
 def parse_table_7_8(table1: Tag, table2: Tag):
     # Table 6: Battery Life Estimates
@@ -79,21 +80,19 @@ def parse_table_7_8(table1: Tag, table2: Tag):
     th_7_l1.append(th_7_l1[-1])
     th_7 = [f"{th_7_l1[i]} - {th_7_l2[i]}" for i in range(len(th_7_l1))]
     td_7 = [td_7[10+i:10+i+6] for i in range(0, len(td_7[10:]), 6)]
-    p_td_7 = [dict(zip(th_7, d)) for d in td_7]
-    
+    df_7 = pd.DataFrame(data=td_7, columns=th_7)
     if not table2:
-        return (p_td_7, None)
+        return (df_7, None)
 
     # Table 7: Current estimate of battery life based on all observed drains since OS install
     # NOTE: Table has no th! So they are taken from the previous step.
     td_8 = [el.text.strip() for el in table2.find_all('td')]
-    p_td_8 = [dict(zip(th_7, td_8))]
-
-    return (p_td_7, p_td_8)
+    df_8 = pd.DataFrame(data=[td_8], columns=th_7)
+    return (df_7, df_8)
     
 TOTAL_TABLES = 8
 
-def parse_table_by_id(table: Tag, idx: int):
+def parse_table_by_id(table: Tag, idx: int) -> pd.DataFrame:
     # Table 0: Metadata - System Info
     if idx == 0:
         return parse_table_1(table)
@@ -117,8 +116,13 @@ def parse_table_by_id(table: Tag, idx: int):
     # Table 5: Battery Capacity History
     if idx == 5:
         return parse_table_6(table)
+    
+    raise BaseException('No known index is given!')
 
-def parse_tables(tables: ResultSet[Tag], table_flags: List[bool]) -> List[Union[None, List[Dict[AnyStr, AnyStr]]]]:
+def parse_tables(
+        tables: ResultSet[Tag],
+        table_flags: List[bool],
+        tables_container: List[List[Union[None,pd.DataFrame]]]):
     """Parser for Battery Report Tables
 
     Args:
@@ -126,16 +130,9 @@ def parse_tables(tables: ResultSet[Tag], table_flags: List[bool]) -> List[Union[
             input array of table nodes from the report
         table_flags: (List[bool]):
             list of bools whether to add or skip parsing for specific tables
-
-    Returns:
-        List[Union[None, List[Dict[AnyStr, AnyStr]]]]:
-            List of all the parsed information.
-            NOTE: For now it is stored either in List of Dicts, or in a Dict,
-            but that's going to change to use a common container class.
+        tables_container: (List[List[Union[None,pd.DataFrame]]])
+            container for parsed pandas dataframes, later to be merged
     """
-    tables_container = []
-    for i in range(0, TOTAL_TABLES):
-        tables_container.append([])
     
     if not tables:
         return tables_container
@@ -143,18 +140,16 @@ def parse_tables(tables: ResultSet[Tag], table_flags: List[bool]) -> List[Union[
     for ti, tf in enumerate(table_flags[:6]):
         if tf:
             print("Ti: %s" % ti)
-            tables_container[ti] = parse_table_by_id(tables[ti], ti)
+            tables_container[ti].append(parse_table_by_id(tables[ti], ti))
     
     # Table 6: Battery Life Estimates &
     # Table 7: Current estimate of battery life based on all observed drains since OS install
     if table_flags[6] or table_flags[7]:
         p_td_7, p_td_8 = parse_table_7_8(tables[6], tables[7])
         if table_flags[6]:
-            tables_container[6] = p_td_7
-        if table_flags[7] and p_td_8:
-            tables_container[7] = p_td_8
-
-    return tables_container
+            tables_container[6].append(p_td_7)
+        if table_flags[7] and p_td_8 is not None and not p_td_8.empty:
+            tables_container[7].append(p_td_8)
 
 arg_parser = argparse.ArgumentParser(description="Windows Battery Report Parser & Analyser.")
 group = arg_parser.add_mutually_exclusive_group(required=True)
@@ -163,28 +158,29 @@ group.add_argument('--input_file', type=Path, help='Report File to parse')
 arg_parser.add_argument('--tables', nargs="+", default='all', help='Tables to parse (default: %(default)s)')
 arg_parser.add_argument('--output_dir', type=Path, help='Directory to save parsed reports to')
 
-def parse_file(input_path, table_flags):
+def parse_file(input_path):
     with input_path as fp:
         soup = BeautifulSoup(fp, 'html.parser')
 
     tables = soup.find_all('table')
-    return parse_tables(tables, table_flags)
+    return tables
 
-def handle_parsed_tables(parsed_tables: List[Union[None, List[Dict[AnyStr, AnyStr]]]], output_dir_path: Path, output_path_pattern: str):
-    print(parsed_tables)
+def handle_parsed_tables(
+        tables_container: List[List[Union[None,pd.DataFrame]]],
+        output_dir_path: Path,
+        output_path_pattern: str):
+    print(tables_container)
 
-    for pt in parsed_tables:
-        print(10*'-')
-        print(pt)
-
-    for idx, pt in enumerate(parsed_tables): # TODO: use indexes not of output array, but of global table presence
+    for idx, pt_df in enumerate(tables_container):
         print(10*'=')
         print(idx)
-        pt_df = pd.DataFrame(data=pt)
-        print(pt_df.head())
-        output_path_df = output_dir_path / (output_path_pattern % idx)
-        print(output_path_df)
-        pt_df.to_parquet(path=output_path_df)
+        if pt_df and type(pt_df[-1]) == pd.DataFrame:
+            last_df : pd.DataFrame = pt_df[-1]
+            print(last_df.head())
+            # MOVE: saving to parquet / any other format
+            output_path_df = output_dir_path / (output_path_pattern % idx)
+            print(output_path_df)
+            last_df.to_parquet(path=output_path_df)
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
@@ -232,9 +228,13 @@ if __name__ == '__main__':
     
     print("Table Process Flags: %s" % table_process_flags)
     
-    # TODO: add merging
+    tables_container = []
+    for _ in range(TOTAL_TABLES):
+        tables_container.append([])
+
     for i, fp in enumerate(input_paths):
         print("I: %s / FP: %s " % (i, fp))
         output_path_pattern = f"test_{i}_%s.parquet"
-        parsed_tables = parse_file(open(fp), table_process_flags)
-        handle_parsed_tables(parsed_tables, output_dir_path, output_path_pattern)
+        table_tags = parse_file(open(fp))
+        parse_tables(table_tags, table_process_flags, tables_container)
+        handle_parsed_tables(tables_container, output_dir_path, output_path_pattern)
