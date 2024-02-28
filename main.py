@@ -164,6 +164,11 @@ def parse_file(input_path):
     tables = soup.find_all('table')
     return tables
 
+def save_df_parquet(df: pd.DataFrame, output_path: Path, output_file_name: str):
+    output_path_full = output_dir_path / output_file_name
+    print(output_path_full)
+    df.to_parquet(path=output_path_full)
+
 def save_tables(
         tables_container: List[List[Union[None,pd.DataFrame]]],
         output_dir_path: Path,
@@ -175,9 +180,7 @@ def save_tables(
             last_df : pd.DataFrame = pt_df[-1]
             print(last_df.head())
             # MOVE: saving to parquet / any other format
-            output_path_df = output_dir_path / (output_path_pattern % idx)
-            print(output_path_df)
-            last_df.to_parquet(path=output_path_df)
+            save_df_parquet(last_df, output_dir_path, output_path_pattern % idx)
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
@@ -242,3 +245,4 @@ if __name__ == '__main__':
             continue
         df_merged = pd.concat(tables_container[i])
         print(df_merged)
+        save_df_parquet(df_merged, output_dir_path, f"merged_%s.parquet" % i)
